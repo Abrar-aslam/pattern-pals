@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fff8e8">
+  <meta name="color-scheme" content="light">
+  <title>Pattern Pals — Shape Match</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23fff0bb'/%3E%3Cpath d='M32 7 59 56H5z' fill='%23f2765c'/%3E%3Ccircle cx='32' cy='38' r='9' fill='%23fffefa'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #243949;
+      --muted: #647786;
+      --paper: #fff8e8;
+      --white: #fffefa;
+      --line: #e5dfd0;
+      --coral: #f2765c;
+      --blue: #61a8dd;
+      --yellow: #f4c84e;
+      --green: #62b591;
+      --purple: #9a86d4;
+      --teal: #42aaa4;
+      font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { min-width: 320px; min-height: 100%; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      min-height: 100svh;
+      margin: 0;
+      color: var(--ink);
+      background-color: var(--paper);
+      background-image: radial-gradient(#e7deca 0.7px, transparent 0.7px);
+      background-size: 19px 19px;
+    }
+
+    button { color: inherit; font: inherit; }
+
+    button:focus-visible {
+      outline: 4px solid #263f55;
+      outline-offset: 4px;
+    }
+
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      width: min(100% - 36px, 900px);
+      min-height: 100vh;
+      min-height: 100svh;
+      margin: 0 auto;
+      padding: 20px 0 10px;
+    }
+
+    .topbar, .brand, .header-tools, .timer, .voice-button, .credits {
+      display: flex;
+      align-items: center;
+    }
+
+    .topbar { justify-content: space-between; gap: 14px; }
+    .brand { gap: 10px; }
+    .brand-mark { display: grid; grid-template-columns: repeat(2, 10px); gap: 3px; transform: rotate(-8deg); }
+    .brand-mark span { width: 10px; height: 10px; border-radius: 3px; background: var(--coral); }
+    .brand-mark span:nth-child(2) { background: var(--yellow); }
+    .brand-mark span:nth-child(3) { background: var(--blue); }
+    .brand-mark span:nth-child(4) { background: var(--green); }
+    .brand-name { font-size: 18px; font-weight: 850; letter-spacing: -.04em; }
+    .header-tools { gap: 9px; }
+
+    .voice-button, .timer {
+      min-height: 44px;
+      justify-content: center;
+      gap: 8px;
+      border: 1.5px solid var(--line);
+      border-radius: 999px;
+      background: var(--white);
+    }
+
+    .voice-button {
+      padding: 0 13px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 750;
+      transition: transform .15s ease, background .15s ease;
+    }
+
+    .voice-button:hover { transform: translateY(-2px); background: #f1fbff; }
+    .voice-button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .timer { min-width: 91px; padding: 0 13px; color: #315366; font-size: 15px; font-weight: 850; font-variant-numeric: tabular-nums; }
+    .timer-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px #e3f4e9; }
+    .timer.is-low { color: #a84839; border-color: #efb4a3; }
+    .timer.is-low .timer-dot { background: var(--coral); box-shadow: 0 0 0 3px #ffebe5; }
+
+    main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 0 28px; }
+    .game-intro { width: 100%; text-align: center; }
+    .eyebrow { margin: 0 0 8px; color: #5f7b77; font-size: 13px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(28px, 5vw, 42px); line-height: 1.1; letter-spacing: -.045em; }
+    .intro-copy { margin: 9px 0 0; color: var(--muted); font-size: clamp(16px, 2.5vw, 19px); font-weight: 600; }
+
+    .play-board { width: 100%; margin-top: 24px; }
+
+    .target-stage {
+      position: relative;
+      display: grid;
+      min-height: clamp(220px, 36vw, 300px);
+      place-items: center;
+      overflow: hidden;
+      border: 2px solid #eadfba;
+      border-radius: 32px;
+      background: #fff0bb;
+    }
+
+    .target-stage::before, .target-stage::after {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #efc957;
+      content: "";
+      opacity: .75;
+    }
+
+    .target-stage::before { top: 22%; left: 18%; }
+    .target-stage::after { right: 17%; bottom: 20%; width: 10px; height: 10px; background: #f28a6a; }
+
+    .target-shape {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      width: clamp(138px, 24vw, 190px);
+      aspect-ratio: 1;
+      place-items: center;
+      filter: drop-shadow(0 10px 0 rgb(62 71 78 / 8%));
+      animation: target-float 2.2s ease-in-out infinite;
+    }
+
+    .target-shape svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+    .choice-instruction {
+      display: flex;
+      min-height: 48px;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      margin: 8px 0 6px;
+      color: #385c69;
+      font-size: 17px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .down-arrow { display: inline-block; color: var(--coral); font-size: 25px; line-height: 1; animation: arrow-nudge 1.15s ease-in-out infinite; }
+
+    .choice-row {
+      display: grid;
+      grid-template-columns: repeat(var(--choice-count, 3), minmax(0, 1fr));
+      gap: 12px;
+      width: min(100%, 820px);
+      margin: 0 auto;
+    }
+
+    .choice-button {
+      display: grid;
+      min-width: 0;
+      min-height: 132px;
+      aspect-ratio: 1.05;
+      place-items: center;
+      padding: 16px;
+      border: 2px solid #e7e1d4;
+      border-radius: 25px;
+      background: var(--white);
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
+      animation: choice-bob 2.4s ease-in-out infinite;
+    }
+
+    .choice-button:nth-child(2) { animation-delay: .18s; }
+    .choice-button:nth-child(3) { animation-delay: .36s; }
+    .choice-button:nth-child(4) { animation-delay: .54s; }
+    .choice-button:nth-child(5) { animation-delay: .72s; }
+    .choice-button:hover:not(:disabled) { transform: translateY(-4px); border-color: #a9d5da; box-shadow: 0 8px 0 #e5eee8; }
+    .choice-button svg { display: block; width: min(100%, 86px); height: auto; overflow: visible; }
+    .choice-button:disabled { cursor: default; }
+    .choice-button.is-wrong { animation: gentle-shake .42s ease both; border-color: #e9a58f; background: #fff0ea; }
+    .choice-button.is-correct { border-color: #68bb8f; background: #eaf8ee; box-shadow: 0 0 0 5px #d3f0dc; }
+    .play-board.is-celebrating .target-shape { animation: happy-bounce .62s ease-in-out 2; }
+    .play-board.is-celebrating .target-stage { border-color: #a5d2a9; background: #f0f5b9; }
+    .feedback { min-height: 32px; margin: 12px 0 0; color: #46765f; font-size: 19px; font-weight: 850; text-align: center; }
+    .feedback.is-gentle { color: #9b5d46; }
+
+    .break-screen {
+      width: min(100%, 650px);
+      margin: 28px auto;
+      padding: clamp(26px, 6vw, 54px) 20px;
+      border: 2px solid #e6dba8;
+      border-radius: 34px;
+      background: #fff2bd;
+      text-align: center;
+    }
+
+    .break-sun { display: inline-grid; width: 112px; height: 112px; place-items: center; border-radius: 50%; background: #ffe080; font-size: 64px; animation: happy-bounce .9s ease-in-out infinite; }
+    .break-screen h2 { margin: 18px 0 8px; font-size: clamp(28px, 6vw, 42px); letter-spacing: -.04em; }
+    .break-screen p { margin: 0; color: #566d73; font-size: clamp(18px, 3vw, 22px); font-weight: 650; }
+    [hidden] { display: none !important; }
+
+    .credits {
+      min-height: 54px;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px 0 2px;
+      border-top: 1px solid rgb(91 106 108 / 13%);
+      color: #596d73;
+      font-size: 13px;
+      font-weight: 750;
+      letter-spacing: .01em;
+    }
+
+    @keyframes target-float { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
+    @keyframes choice-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+    @keyframes arrow-nudge { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(5px); } }
+    @keyframes gentle-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-7px); } 40%, 80% { transform: translateX(7px); } }
+    @keyframes happy-bounce { 0%, 100% { transform: translateY(0) scale(1); } 35% { transform: translateY(-18px) scale(1.06); } 65% { transform: translateY(0) scale(.97); } }
+
+    @media (max-width: 620px) {
+      .app-shell { width: min(100% - 24px, 520px); padding-top: 13px; }
+      .brand-name { font-size: 16px; }
+      .voice-button { min-height: 40px; gap: 6px; padding: 0 10px; font-size: 13px; }
+      .timer { min-width: 80px; min-height: 40px; gap: 6px; padding: 0 10px; font-size: 13px; }
+      main { justify-content: flex-start; padding: 25px 0 20px; }
+      .play-board { margin-top: 19px; }
+      .target-stage { min-height: clamp(190px, 58vw, 260px); border-radius: 25px; }
+      .choice-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      .choice-row.is-two { grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(100%, 380px); }
+      .choice-button { min-height: 92px; padding: 10px; border-radius: 20px; }
+      .choice-button svg { width: min(100%, 68px); }
+      .choice-instruction { margin-top: 7px; font-size: 15px; }
+      .feedback { min-height: 28px; font-size: 17px; }
+    }
+
+    @media (max-width: 370px) {
+      .app-shell { width: min(100% - 18px, 520px); }
+      .brand { gap: 7px; }
+      .brand-name { font-size: 14px; }
+      .voice-button { min-height: 38px; padding: 0 8px; font-size: 12px; }
+      .timer { min-width: 72px; min-height: 38px; padding: 0 8px; font-size: 12px; }
+      .choice-button { min-height: 82px; padding: 7px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand" aria-label="Pattern Pals">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+        <span class="brand-name">Pattern Pals</span>
+      </div>
+      <div class="header-tools">
+        <button class="voice-button" id="hear-button" type="button" aria-label="Hear the directions again">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4H4Z"></path><path d="M16 9a4 4 0 0 1 0 6"></path></svg>
+          <span>Hear</span>
+        </button>
+        <div class="timer" id="timer" aria-label="15 minutes left">
+          <span class="timer-dot" aria-hidden="true"></span>
+          <span id="timer-text">15:00</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="game-intro" id="game-intro" aria-labelledby="game-title">
+        <p class="eyebrow">A little shape game</p>
+        <h1 id="game-title">Find the same shape!</h1>
+        <p class="intro-copy">Tap one that looks just like it</p>
+      </section>
+
+      <section class="play-board" id="play-board" aria-label="Shape matching game">
+        <div class="target-stage">
+          <div class="target-shape" id="target-shape" role="img" aria-label="Shape to match"></div>
+        </div>
+        <div class="choice-instruction"><span class="down-arrow" aria-hidden="true">↓</span><span>Tap the matching shape</span></div>
+        <div class="choice-row" id="choice-row" aria-label="Shape choices"></div>
+        <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="break-screen" id="break-screen" aria-live="polite" hidden>
+        <div class="break-sun" aria-hidden="true">☀️</div>
+        <h2>Great job!</h2>
+        <p>Time for a break!</p>
+      </section>
+    </main>
+
+    <footer class="credits">
+      <span>built with ai + frnds</span>
+    </footer>
+  </div>
+
+  <script>
+    (() => {
+      const sessionKey = "pattern-pals-shape-match-opened-at";
+      const sessionLength = 15 * 60 * 1000;
+      const palette = ["#f2765c", "#61a8dd", "#f4c84e", "#62b591", "#9a86d4", "#42aaa4"];
+      const basicShapes = ["circle", "square", "triangle"];
+      const familiarShapes = [...basicShapes, "star"];
+      const broaderShapes = [...familiarShapes, "pentagon"];
+      const practicedShapes = [...broaderShapes, "hexagon"];
+      const fullShapes = [...practicedShapes, "oval", "rectangle", "narrowTriangle"];
+      const difficultySteps = [
+        { choiceCount: 2, shapes: basicShapes },
+        { choiceCount: 3, shapes: basicShapes },
+        { choiceCount: 3, shapes: familiarShapes },
+        { choiceCount: 4, shapes: familiarShapes },
+        { choiceCount: 4, shapes: broaderShapes },
+        { choiceCount: 5, shapes: practicedShapes },
+        { choiceCount: 5, shapes: practicedShapes, rotateTriangles: true },
+        { choiceCount: 5, shapes: practicedShapes, varySize: true },
+        { choiceCount: 5, shapes: practicedShapes, varySize: true, varyColor: true },
+        { choiceCount: 5, shapes: fullShapes, varySize: true, varyColor: true, rotateTriangles: true, nearMiss: true }
+      ];
+      const similarShapes = {
+        circle: ["oval"],
+        oval: ["circle"],
+        square: ["rectangle"],
+        rectangle: ["square"],
+        triangle: ["narrowTriangle"],
+        narrowTriangle: ["triangle"],
+        pentagon: ["hexagon"],
+        hexagon: ["pentagon"]
+      };
+      const shapeNames = {
+        circle: "circle",
+        oval: "oval",
+        square: "square",
+        rectangle: "rectangle",
+        triangle: "triangle",
+        narrowTriangle: "narrow triangle",
+        pentagon: "pentagon",
+        hexagon: "hexagon",
+        star: "star"
+      };
+      const targetShape = document.getElementById("target-shape");
+      const choiceRow = document.getElementById("choice-row");
+      const playBoard = document.getElementById("play-board");
+      const feedback = document.getElementById("feedback");
+      const timer = document.getElementById("timer");
+      const timerText = document.getElementById("timer-text");
+      const breakScreen = document.getElementById("break-screen");
+      const gameIntro = document.getElementById("game-intro");
+      const hearButton = document.getElementById("hear-button");
+      const speechAvailable = Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
+      let difficulty = 0;
+      let correctStreak = 0;
+      let missesSinceAdjustment = 0;
+      let currentRound = null;
+      let missedThisRound = false;
+      let answered = false;
+      let ended = false;
+      let audioContext = null;
+      let timerHandle = null;
+
+      function getSessionStart() {
+        try {
+          const savedStart = Number(sessionStorage.getItem(sessionKey));
+          if (savedStart > 0) return savedStart;
+          const now = Date.now();
+          sessionStorage.setItem(sessionKey, String(now));
+          return now;
+        } catch {
+          return Date.now();
+        }
+      }
+
+      const sessionStartedAt = getSessionStart();
+      const sessionEndsAt = sessionStartedAt + sessionLength;
+
+      function randomIndex(length) {
+        return Math.floor(Math.random() * length);
+      }
+
+      function shuffle(items) {
+        const shuffled = [...items];
+        for (let index = shuffled.length - 1; index > 0; index -= 1) {
+          const swapIndex = randomIndex(index + 1);
+          [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+        }
+        return shuffled;
+      }
+
+      function shapeMarkup(shape, color, appearance = {}) {
+        const paths = {
+          circle: `<circle cx="60" cy="60" r="42" fill="${color}"/>`,
+          oval: `<ellipse cx="60" cy="60" rx="48" ry="34" fill="${color}"/>`,
+          square: `<rect x="20" y="20" width="80" height="80" rx="10" fill="${color}"/>`,
+          rectangle: appearance.nearRectangle
+            ? `<rect x="16" y="22" width="88" height="76" rx="9" fill="${color}"/>`
+            : `<rect x="12" y="35" width="96" height="50" rx="9" fill="${color}"/>`,
+          triangle: `<path d="M60 12 109 103H11L60 12Z" fill="${color}"/>`,
+          narrowTriangle: `<path d="M60 10 91 105H29L60 10Z" fill="${color}"/>`,
+          pentagon: `<path d="M60 10 108 45 90 104H30L12 45 60 10Z" fill="${color}"/>`,
+          hexagon: `<path d="M34 14H86L111 60 86 106H34L9 60 34 14Z" fill="${color}"/>`,
+          star: `<path d="m60 8 13 34 36 2-28 23 9 35-30-19-30 19 9-35-28-23 36-2L60 8Z" fill="${color}"/>`
+        };
+        const angle = appearance.angle || 0;
+        const scale = appearance.scale || 1;
+        return `<svg viewBox="0 0 120 120" aria-hidden="true" focusable="false"><g transform="translate(60 60) rotate(${angle}) scale(${scale}) translate(-60 -60)">${paths[shape]}</g></svg>`;
+      }
+
+      function speak(text) {
+        if (!speechAvailable) return;
+        window.speechSynthesis.cancel();
+        const announcement = new SpeechSynthesisUtterance(text);
+        announcement.lang = "en-US";
+        announcement.rate = 0.82;
+        announcement.pitch = 1.08;
+        announcement.volume = 1;
+        window.speechSynthesis.speak(announcement);
+      }
+
+      function playYaySound() {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        try {
+          if (!audioContext) audioContext = new AudioContextClass();
+          audioContext.resume();
+          const startTime = audioContext.currentTime;
+          [523.25, 659.25, 783.99].forEach((frequency, index) => {
+            const startAt = startTime + index * 0.12;
+            const oscillator = audioContext.createOscillator();
+            const volume = audioContext.createGain();
+            oscillator.type = "sine";
+            oscillator.frequency.setValueAtTime(frequency, startAt);
+            volume.gain.setValueAtTime(0.0001, startAt);
+            volume.gain.exponentialRampToValueAtTime(0.13, startAt + 0.025);
+            volume.gain.exponentialRampToValueAtTime(0.001, startAt + 0.24);
+            oscillator.connect(volume);
+            volume.connect(audioContext.destination);
+            oscillator.start(startAt);
+            oscillator.stop(startAt + 0.25);
+          });
+        } catch { }
+      }
+
+      function createAppearance(shape, step) {
+        const rotations = [0, 90, 180, 270];
+        const scales = [0.84, 0.93, 1, 1.07, 1.16];
+        const canRotate = step.rotateTriangles && (shape === "triangle" || shape === "narrowTriangle");
+        return {
+          angle: canRotate ? rotations[randomIndex(rotations.length)] : 0,
+          scale: step.varySize ? scales[randomIndex(scales.length)] : 1,
+          nearRectangle: step.nearMiss && shape === "rectangle"
+        };
+      }
+
+      function createRound() {
+        const step = difficultySteps[difficulty];
+        const targetPool = step.rotateTriangles ? [...step.shapes, "triangle"] : step.shapes;
+        const target = targetPool[randomIndex(targetPool.length)];
+        const choiceShapes = [];
+
+        if (step.nearMiss) {
+          const nearby = (similarShapes[target] || []).filter((shape) => step.shapes.includes(shape));
+          if (nearby.length) choiceShapes.push(nearby[randomIndex(nearby.length)]);
+        }
+
+        const distractors = shuffle(step.shapes.filter((shape) => shape !== target && !choiceShapes.includes(shape)));
+        while (choiceShapes.length < step.choiceCount - 1 && distractors.length) {
+          choiceShapes.push(distractors.pop());
+        }
+
+        const targetColor = step.varyColor ? palette[randomIndex(palette.length)] : palette[1];
+        const otherColors = shuffle(palette.filter((color) => color !== targetColor));
+        const choices = shuffle([...choiceShapes, target]).map((shape, index) => ({
+          shape,
+          color: step.varyColor ? otherColors[index] : targetColor,
+          appearance: createAppearance(shape, step)
+        }));
+
+        return {
+          target,
+          targetColor,
+          targetAppearance: createAppearance(target, step),
+          choices
+        };
+      }
+
+      function renderRound() {
+        currentRound = createRound();
+        answered = false;
+        missedThisRound = false;
+        playBoard.classList.remove("is-celebrating");
+        feedback.className = "feedback";
+        feedback.textContent = "";
+        targetShape.innerHTML = shapeMarkup(currentRound.target, currentRound.targetColor, currentRound.targetAppearance);
+        targetShape.setAttribute("aria-label", `Find this shape: ${shapeNames[currentRound.target]}`);
+        choiceRow.replaceChildren();
+        choiceRow.style.setProperty("--choice-count", String(currentRound.choices.length));
+        choiceRow.classList.toggle("is-two", currentRound.choices.length === 2);
+
+        currentRound.choices.forEach((choice) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "choice-button";
+          button.setAttribute("aria-label", `Choose ${shapeNames[choice.shape]}`);
+          button.innerHTML = shapeMarkup(choice.shape, choice.color, choice.appearance);
+          button.addEventListener("click", () => chooseShape(button, choice.shape));
+          choiceRow.append(button);
+        });
+      }
+
+      function chooseShape(button, selectedShape) {
+        if (ended || answered) return;
+
+        if (selectedShape === currentRound.target) {
+          answered = true;
+          button.classList.add("is-correct");
+          choiceRow.querySelectorAll("button").forEach((choiceButton) => { choiceButton.disabled = true; });
+          playBoard.classList.add("is-celebrating");
+          feedback.className = "feedback";
+          feedback.textContent = "Yay! You found it!";
+          playYaySound();
+          speak("Yay! You found it!");
+          if (!missedThisRound) {
+            correctStreak += 1;
+            missesSinceAdjustment = 0;
+            if (correctStreak >= 2) {
+              difficulty = Math.min(difficultySteps.length - 1, difficulty + 1);
+              correctStreak = 0;
+            }
+          } else {
+            correctStreak = 0;
+          }
+          window.setTimeout(() => {
+            if (!ended) renderRound();
+          }, 1050);
+          return;
+        }
+
+        button.classList.remove("is-wrong");
+        void button.offsetWidth;
+        button.classList.add("is-wrong");
+        button.addEventListener("animationend", () => button.classList.remove("is-wrong"), { once: true });
+        feedback.className = "feedback is-gentle";
+        feedback.textContent = "Oops! Try again.";
+        missedThisRound = true;
+        correctStreak = 0;
+        missesSinceAdjustment += 1;
+        if (missesSinceAdjustment >= 3) {
+          difficulty = Math.max(0, difficulty - 1);
+          missesSinceAdjustment = 0;
+        }
+        speak("Oops. Try again. Find the same shape.");
+      }
+
+      function finishSession() {
+        if (ended) return;
+        ended = true;
+        if (timerHandle) window.clearInterval(timerHandle);
+        timerHandle = null;
+        if (speechAvailable) window.speechSynthesis.cancel();
+        timerText.textContent = "00:00";
+        timer.setAttribute("aria-label", "Play time finished");
+        timer.classList.remove("is-low");
+        gameIntro.hidden = true;
+        playBoard.hidden = true;
+        breakScreen.hidden = false;
+        speak("Great job! Time for a break!");
+      }
+
+      function updateTimer() {
+        const secondsRemaining = Math.max(0, Math.ceil((sessionEndsAt - Date.now()) / 1000));
+        const minutes = String(Math.floor(secondsRemaining / 60)).padStart(2, "0");
+        const seconds = String(secondsRemaining % 60).padStart(2, "0");
+        timerText.textContent = `${minutes}:${seconds}`;
+        timer.setAttribute("aria-label", `${minutes} minutes and ${seconds} seconds left`);
+        timer.classList.toggle("is-low", secondsRemaining > 0 && secondsRemaining <= 60);
+        if (secondsRemaining === 0) finishSession();
+      }
+
+      hearButton.hidden = !speechAvailable;
+      hearButton.addEventListener("click", () => speak("Find the same shape. Tap the one that looks just like it."));
+      renderRound();
+      updateTimer();
+
+      if (!ended) {
+        timerHandle = window.setInterval(updateTimer, 1000);
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) updateTimer();
+        });
+        window.addEventListener("pageshow", updateTimer);
+        window.setTimeout(() => speak("Find the same shape. Tap the one that looks just like it."), 650);
+      }
+
+      window.addEventListener("pagehide", () => {
+        if (speechAvailable) window.speechSynthesis.cancel();
+      });
+    })();
+  </script>
+</body>
+</html>
