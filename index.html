@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#fff8e8">
   <meta name="color-scheme" content="light">
-  <title>Pattern Pals — Shape Match</title>
+  <title>Pattern Pals — Shapes &amp; Counting</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23fff0bb'/%3E%3Cpath d='M32 7 59 56H5z' fill='%23f2765c'/%3E%3Ccircle cx='32' cy='38' r='9' fill='%23fffefa'/%3E%3C/svg%3E">
   <style>
     :root {
@@ -140,6 +140,10 @@
 
     .target-shape svg { display: block; width: 100%; height: 100%; overflow: visible; }
 
+    .target-shape.is-count { display: flex; width: min(100%, 560px); aspect-ratio: auto; flex-wrap: wrap; align-content: center; justify-content: center; gap: 6px 10px; padding: 18px; filter: none; animation: none; }
+    .critter { font-size: clamp(38px, 9vw, 60px); line-height: 1.1; animation: critter-pop .45s ease backwards; }
+    .number-choice { font-size: clamp(44px, 11vw, 68px); font-weight: 850; line-height: 1; color: var(--ink); }
+
     .choice-instruction {
       display: flex;
       min-height: 48px;
@@ -222,6 +226,7 @@
     }
 
     @keyframes target-float { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
+    @keyframes critter-pop { from { transform: scale(0) rotate(-20deg); } to { transform: scale(1) rotate(0); } }
     @keyframes choice-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
     @keyframes arrow-nudge { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(5px); } }
     @keyframes gentle-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-7px); } 40%, 80% { transform: translateX(7px); } }
@@ -278,16 +283,16 @@
 
     <main>
       <section class="game-intro" id="game-intro" aria-labelledby="game-title">
-        <p class="eyebrow">A little shape game</p>
+        <p class="eyebrow" id="eyebrow">A little shape game</p>
         <h1 id="game-title">Find the same shape!</h1>
-        <p class="intro-copy">Tap one that looks just like it</p>
+        <p class="intro-copy" id="intro-copy">Tap one that looks just like it</p>
       </section>
 
-      <section class="play-board" id="play-board" aria-label="Shape matching game">
+      <section class="play-board" id="play-board" aria-label="Shape and counting game">
         <div class="target-stage">
           <div class="target-shape" id="target-shape" role="img" aria-label="Shape to match"></div>
         </div>
-        <div class="choice-instruction"><span class="down-arrow" aria-hidden="true">↓</span><span>Tap the matching shape</span></div>
+        <div class="choice-instruction"><span class="down-arrow" aria-hidden="true">↓</span><span id="choice-hint">Tap the matching shape</span></div>
         <div class="choice-row" id="choice-row" aria-label="Shape choices"></div>
         <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
       </section>
@@ -326,6 +331,29 @@
         { choiceCount: 5, shapes: practicedShapes, varySize: true, varyColor: true },
         { choiceCount: 5, shapes: fullShapes, varySize: true, varyColor: true, rotateTriangles: true, nearMiss: true }
       ];
+      const countSteps = [
+        { choiceCount: 2, max: 3 },
+        { choiceCount: 3, max: 4 },
+        { choiceCount: 3, max: 5 },
+        { choiceCount: 3, max: 6 },
+        { choiceCount: 4, max: 7 },
+        { choiceCount: 4, max: 8 },
+        { choiceCount: 4, max: 9 },
+        { choiceCount: 5, max: 10 },
+        { choiceCount: 5, max: 11 },
+        { choiceCount: 5, max: 12 }
+      ];
+      const critters = ["🐶", "🐱", "🐰", "🐻", "🐼", "🐸", "🐥", "🦊", "🐮", "🐷"];
+      const prompts = {
+        shape: {
+          eyebrow: "A little shape game", title: "Find the same shape!", copy: "Tap one that looks just like it",
+          hint: "Tap the matching shape", speech: "Find the same shape. Tap the one that looks just like it."
+        },
+        count: {
+          eyebrow: "A little counting game", title: "How many are there?", copy: "Count them, then tap the number",
+          hint: "Tap the matching number", speech: "How many are there? Count them, then tap the number."
+        }
+      };
       const similarShapes = {
         circle: ["oval"],
         oval: ["circle"],
@@ -357,9 +385,16 @@
       const gameIntro = document.getElementById("game-intro");
       const hearButton = document.getElementById("hear-button");
       const speechAvailable = Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
-      let difficulty = 0;
-      let correctStreak = 0;
-      let missesSinceAdjustment = 0;
+      const eyebrow = document.getElementById("eyebrow");
+      const gameTitle = document.getElementById("game-title");
+      const introCopy = document.getElementById("intro-copy");
+      const choiceHint = document.getElementById("choice-hint");
+      // Each mode adapts on its own; rounds alternate shape, count, shape, ...
+      const progress = {
+        shape: { level: 0, streak: 0, misses: 0 },
+        count: { level: 0, streak: 0, misses: 0 }
+      };
+      let roundNumber = 0;
       let currentRound = null;
       let missedThisRound = false;
       let answered = false;
@@ -460,8 +495,22 @@
         };
       }
 
+      function createCountRound() {
+        const step = countSteps[progress.count.level];
+        const target = 1 + randomIndex(step.max);
+        const options = new Set([target]);
+        const limit = Math.max(step.max, step.choiceCount);
+        while (options.size < step.choiceCount) options.add(1 + randomIndex(limit));
+        return {
+          mode: "count",
+          target,
+          critter: critters[randomIndex(critters.length)],
+          choices: shuffle([...options]).map((value) => ({ value }))
+        };
+      }
+
       function createRound() {
-        const step = difficultySteps[difficulty];
+        const step = difficultySteps[progress.shape.level];
         const targetPool = step.rotateTriangles ? [...step.shapes, "triangle"] : step.shapes;
         const target = targetPool[randomIndex(targetPool.length)];
         const choiceShapes = [];
@@ -485,6 +534,7 @@
         }));
 
         return {
+          mode: "shape",
           target,
           targetColor,
           targetAppearance: createAppearance(target, step),
@@ -493,33 +543,62 @@
       }
 
       function renderRound() {
-        currentRound = createRound();
+        currentRound = roundNumber % 2 === 0 ? createRound() : createCountRound();
+        roundNumber += 1;
+        const mode = currentRound.mode;
         answered = false;
         missedThisRound = false;
         playBoard.classList.remove("is-celebrating");
         feedback.className = "feedback";
         feedback.textContent = "";
-        targetShape.innerHTML = shapeMarkup(currentRound.target, currentRound.targetColor, currentRound.targetAppearance);
-        targetShape.setAttribute("aria-label", `Find this shape: ${shapeNames[currentRound.target]}`);
+        eyebrow.textContent = prompts[mode].eyebrow;
+        gameTitle.textContent = prompts[mode].title;
+        introCopy.textContent = prompts[mode].copy;
+        choiceHint.textContent = prompts[mode].hint;
+        targetShape.classList.toggle("is-count", mode === "count");
         choiceRow.replaceChildren();
         choiceRow.style.setProperty("--choice-count", String(currentRound.choices.length));
         choiceRow.classList.toggle("is-two", currentRound.choices.length === 2);
+
+        if (mode === "count") {
+          targetShape.replaceChildren();
+          for (let index = 0; index < currentRound.target; index += 1) {
+            const critter = document.createElement("span");
+            critter.className = "critter";
+            critter.textContent = currentRound.critter;
+            critter.style.animationDelay = `${index * 0.12}s`;
+            targetShape.append(critter);
+          }
+          targetShape.setAttribute("aria-label", `Count the animals: ${currentRound.target}`);
+        } else {
+          targetShape.innerHTML = shapeMarkup(currentRound.target, currentRound.targetColor, currentRound.targetAppearance);
+          targetShape.setAttribute("aria-label", `Find this shape: ${shapeNames[currentRound.target]}`);
+        }
 
         currentRound.choices.forEach((choice) => {
           const button = document.createElement("button");
           button.type = "button";
           button.className = "choice-button";
-          button.setAttribute("aria-label", `Choose ${shapeNames[choice.shape]}`);
-          button.innerHTML = shapeMarkup(choice.shape, choice.color, choice.appearance);
-          button.addEventListener("click", () => chooseShape(button, choice.shape));
+          if (mode === "count") {
+            button.setAttribute("aria-label", `Choose ${choice.value}`);
+            button.innerHTML = `<span class="number-choice" aria-hidden="true">${choice.value}</span>`;
+            button.addEventListener("click", () => choose(button, choice.value));
+          } else {
+            button.setAttribute("aria-label", `Choose ${shapeNames[choice.shape]}`);
+            button.innerHTML = shapeMarkup(choice.shape, choice.color, choice.appearance);
+            button.addEventListener("click", () => choose(button, choice.shape));
+          }
           choiceRow.append(button);
         });
       }
 
-      function chooseShape(button, selectedShape) {
+      function choose(button, selected) {
         if (ended || answered) return;
+        const mode = currentRound.mode;
+        const state = progress[mode];
+        const steps = mode === "count" ? countSteps : difficultySteps;
 
-        if (selectedShape === currentRound.target) {
+        if (selected === currentRound.target) {
           answered = true;
           button.classList.add("is-correct");
           choiceRow.querySelectorAll("button").forEach((choiceButton) => { choiceButton.disabled = true; });
@@ -529,14 +608,14 @@
           playYaySound();
           speak("Yay! You found it!");
           if (!missedThisRound) {
-            correctStreak += 1;
-            missesSinceAdjustment = 0;
-            if (correctStreak >= 2) {
-              difficulty = Math.min(difficultySteps.length - 1, difficulty + 1);
-              correctStreak = 0;
+            state.streak += 1;
+            state.misses = 0;
+            if (state.streak >= 2) {
+              state.level = Math.min(steps.length - 1, state.level + 1);
+              state.streak = 0;
             }
           } else {
-            correctStreak = 0;
+            state.streak = 0;
           }
           window.setTimeout(() => {
             if (!ended) renderRound();
@@ -551,13 +630,13 @@
         feedback.className = "feedback is-gentle";
         feedback.textContent = "Oops! Try again.";
         missedThisRound = true;
-        correctStreak = 0;
-        missesSinceAdjustment += 1;
-        if (missesSinceAdjustment >= 3) {
-          difficulty = Math.max(0, difficulty - 1);
-          missesSinceAdjustment = 0;
+        state.streak = 0;
+        state.misses += 1;
+        if (state.misses >= 3) {
+          state.level = Math.max(0, state.level - 1);
+          state.misses = 0;
         }
-        speak("Oops. Try again. Find the same shape.");
+        speak(mode === "count" ? "Oops. Try again. Count them." : "Oops. Try again. Find the same shape.");
       }
 
       function finishSession() {
@@ -586,7 +665,7 @@
       }
 
       hearButton.hidden = !speechAvailable;
-      hearButton.addEventListener("click", () => speak("Find the same shape. Tap the one that looks just like it."));
+      hearButton.addEventListener("click", () => speak(prompts[currentRound.mode].speech));
       renderRound();
       updateTimer();
 
@@ -596,7 +675,7 @@
           if (!document.hidden) updateTimer();
         });
         window.addEventListener("pageshow", updateTimer);
-        window.setTimeout(() => speak("Find the same shape. Tap the one that looks just like it."), 650);
+        window.setTimeout(() => speak(prompts[currentRound.mode].speech), 650);
       }
 
       window.addEventListener("pagehide", () => {
