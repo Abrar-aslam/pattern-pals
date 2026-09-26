@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Count Critters</title>
+<style>
+  :root { --bg:#fff7e6; --ink:#3b2f2f; --accent:#ff8fab; --ok:#7bc96f; --tile:#ffffff; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:"Trebuchet MS",system-ui,sans-serif; overflow:hidden; }
+  main { height:100%; display:flex; flex-direction:column; align-items:center; padding:16px; gap:16px; }
+  .hidden { display:none !important; }
+  /* time bar: a shrinking sun-coloured strip, no numbers */
+  #timebar { width:100%; height:14px; background:#ffe3a3; border-radius:7px; overflow:hidden; flex:none; }
+  #timefill { height:100%; width:100%; background:#ffb703; border-radius:7px; transition:width 1s linear; }
+  #stage { flex:1; width:100%; max-width:640px; display:flex; flex-wrap:wrap; align-content:center; justify-content:center; gap:8px; font-size:clamp(40px,11vw,72px); }
+  .critter { animation:pop .4s ease backwards; }
+  @keyframes pop { from { transform:scale(0) rotate(-20deg); } to { transform:scale(1); } }
+  #choices { display:flex; gap:14px; flex:none; padding-bottom:16px; }
+  .tile { width:clamp(80px,24vw,120px); height:clamp(80px,24vw,120px); border:0; border-radius:24px; background:var(--tile); font-size:clamp(44px,13vw,68px); font-weight:bold; color:var(--ink); box-shadow:0 6px 0 #e2d3b3; cursor:pointer; }
+  .tile:active { transform:translateY(4px); box-shadow:0 2px 0 #e2d3b3; }
+  .tile.wrong { animation:shake .4s; }
+  .tile.right { background:var(--ok); animation:bounce .5s; }
+  .tile.hint { animation:pulse .8s infinite; }
+  @keyframes shake { 25% { transform:translateX(-10px); } 75% { transform:translateX(10px); } }
+  @keyframes bounce { 40% { transform:scale(1.25); } }
+  @keyframes pulse { 50% { transform:scale(1.12); box-shadow:0 0 0 8px #ffd6e0; } }
+  /* start + done screens */
+  .center { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; text-align:center; }
+  .big { font-size:clamp(80px,26vw,160px); }
+  #play { width:min(60vw,220px); height:min(60vw,220px); border:0; border-radius:50%; background:var(--accent); color:#fff; font-size:clamp(70px,22vw,110px); box-shadow:0 10px 0 #d9698a; cursor:pointer; }
+  #play:active { transform:translateY(6px); box-shadow:0 4px 0 #d9698a; }
+  #done h1 { font-size:clamp(28px,7vw,44px); margin:0; }
+  #reset { position:fixed; right:8px; bottom:8px; width:44px; height:44px; opacity:.15; border:0; background:none; font-size:24px; }
+</style>
+</head>
+<body>
+<main>
+  <section id="start" class="center">
+    <div class="big">🐣</div>
+    <button id="play" aria-label="Play">▶</button>
+  </section>
+
+  <section id="game" class="hidden" style="width:100%;flex:1;display:flex;flex-direction:column;align-items:center;gap:16px">
+    <div id="timebar"><div id="timefill"></div></div>
+    <div id="stage" aria-live="polite"></div>
+    <div id="choices"></div>
+  </section>
+
+  <section id="done" class="center hidden">
+    <div class="big">🌙😴</div>
+    <h1>All done! See you next time!</h1>
+    <button id="reset" aria-label="Grown-up reset (hold 3 seconds)">🔓</button>
+  </section>
+</main>
+
+<script>
+(() => {
+  const SESSION_MS = 15 * 60 * 1000;           // 15-minute screen-time cap
+  const CRITTERS = ["🐶","🐱","🐰","🐻","🐼","🐸","🐥","🦊","🐮","🐷"];
+  const MAX_LEVEL = 10;
+  const $ = id => document.getElementById(id);
+
+  // Only thing ever stored: the date the daily play time was used up. No personal data.
+  const today = () => new Date().toISOString().slice(0,10);
+  const store = {
+    get() { try { return localStorage.getItem("cc-used"); } catch { return null; } },
+    set(v) { try { localStorage.setItem("cc-used", v); } catch {} },
+    clear() { try { localStorage.removeItem("cc-used"); } catch {} }
+  };
+
+  let level = 1, streak = 0, misses = 0, answer = 0, locked = false, endAt = 0, timer = 0;
+
+  // Difficulty scales with level: bigger counts, more answer choices.
+  const maxCount = () => Math.min(2 + level, 12);
+  const numChoices = () => level < 3 ? 2 : level < 7 ? 3 : 4;
+
+  function show(id) { for (const s of ["start","game","done"]) $(s).classList.toggle("hidden", s !== id); }
+
+  function finish() {
+    clearInterval(timer);
+    store.set(today());
+    show("done");
+  }
+
+  function tick() {
+    const left = endAt - Date.now();
+    $("timefill").style.width = Math.max(0, left / SESSION_MS * 100) + "%";
+    if (left <= 0) finish();
+  }
+
+  function newRound() {
+    locked = false; misses = 0;
+    answer = 1 + Math.floor(Math.random() * maxCount());
+    const critter = CRITTERS[Math.floor(Math.random() * CRITTERS.length)];
+    $("stage").innerHTML = "";
+    for (let i = 0; i < answer; i++) {
+      const s = document.createElement("span");
+      s.className = "critter"; s.textContent = critter;
+      s.style.animationDelay = (i * 0.12) + "s";
+      $("stage").appendChild(s);
+    }
+    const opts = new Set([answer]);
+    const limit = Math.max(maxCount(), numChoices());
+    while (opts.size < numChoices()) opts.add(1 + Math.floor(Math.random() * limit));
+    $("choices").innerHTML = "";
+    [...opts].sort(() => Math.random() - .5).forEach(n => {
+      const b = document.createElement("button");
+      b.className = "tile"; b.textContent = n; b.dataset.n = n;
+      b.onclick = () => pick(b, n);
+      $("choices").appendChild(b);
+    });
+  }
+
+  // Adaptive rule: 2 correct in a row (first try) -> level up; 3 misses in a row -> level down.
+  let missStreak = 0;
+  function pick(btn, n) {
+    if (locked) return;
+    if (n === answer) {
+      locked = true;
+      btn.classList.add("right");
+      if (misses === 0) { streak++; missStreak = 0; } else { streak = 0; }
+      if (streak >= 2 && level < MAX_LEVEL) { level++; streak = 0; }
+      setTimeout(newRound, 900);
+    } else {
+      misses++; streak = 0; missStreak++;
+      btn.classList.add("wrong");
+      setTimeout(() => btn.classList.remove("wrong"), 400);
+      if (missStreak >= 3 && level > 1) { level--; missStreak = 0; }
+      if (misses >= 2) {   // gentle help: pulse the right tile
+        [...$("choices").children].find(c => +c.dataset.n === answer).classList.add("hint");
+      }
+    }
+  }
+
+  $("play").onclick = () => {
+    endAt = Date.now() + SESSION_MS;
+    show("game"); newRound();
+    tick(); timer = setInterval(tick, 1000);
+  };
+
+  // Grown-up reset: hold the faint lock 3 seconds on the done screen.
+  let hold = 0;
+  $("reset").onpointerdown = () => { hold = setTimeout(() => { store.clear(); show("start"); }, 3000); };
+  $("reset").onpointerup = $("reset").onpointerleave = () => clearTimeout(hold);
+
+  // Already used today's time? Go straight to the done screen.
+  show(store.get() === today() ? "done" : "start");
+})();
+</script>
+</body>
+</html>
